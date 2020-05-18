@@ -12,7 +12,7 @@
 // DAC Defines *****************************************************************
 //******************************************************************************
 
-#define DAC_ADDR 0x74
+#define DAC_ADDR 0x63
 
 // Commands
 #define DAC_WRITE_ALL       (0b011 << 5)
@@ -225,11 +225,25 @@ void init_I2C(){
 
 }
 
+void delay_ms(uint8_t ms){
+    while(ms){
+        __delay_cycles(1000);  // 1000 cycles for 1MHz
+        ms--;
+    }
+}
+
 int main(void)
 {
     WDTCTL = WDTPW | WDTHOLD;   // stop watchdog timer
     init_cs();
     init_I2C();
+
+    // Temporary: Keep charging switch off
+    P2DIR |= BIT0;
+    P2OUT &= ~(BIT0);
+
+    // After MSP430 init, wait 20ms for 3.3V bus to rise to 3.3V
+    delay_ms(20);
 
     I2C_Master_WriteReg(DAC_ADDR, DAC_PWR_ON_CONFIG, DAC_VOLT, DAC_DATA_LENGTH);
 
