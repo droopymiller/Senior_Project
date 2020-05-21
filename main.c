@@ -2,12 +2,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "I2C.h"
+#include "ADC.h"
+#include "TimerA.h"
 
 
 /**
  * main.c
  */
 
+
+#define debug true
 
 //******************************************************************************
 // DAC Defines *****************************************************************
@@ -67,6 +71,23 @@
 uint8_t DAC_VOLT [DAC_DATA_LENGTH] = {0x00FF & (DAC_MAX_VOLT >> 2), 0x00FF & (DAC_MAX_VOLT << 6)};
 
 
+//******************************************************************************
+// State Machine ***************************************************************
+//******************************************************************************
+
+typedef enum CPU_ModeEnum{
+    I_MEAS,
+    IDLE
+} CPU_Mode;
+
+CPU_Mode PS = IDLE;
+CPU_Mode NS = IDLE;
+
+
+//******************************************************************************
+// Current Measurement *********************************************************
+//******************************************************************************
+uint16_t input_current;
 
 
 void init_cs(){
@@ -100,6 +121,8 @@ int main(void)
     WDTCTL = WDTPW | WDTHOLD;   // stop watchdog timer
     init_cs();
     init_I2C();
+    init_ADC();
+    init_TimerA();
     init_zero_crossing_detection();
 
     // Temporary: Keep charging switch off
@@ -115,7 +138,18 @@ int main(void)
 
     I2C_Master_WriteReg(DAC_ADDR, DAC_PWR_ON_CONFIG, DAC_VOLT, DAC_DATA_LENGTH);
 
-    while(1);
+    while(1){
+        switch(PS) {
+        case I_MEAS:
+            while(!ADC_conversion_complete());     // Wait for conversion to finish
+            input_current = get_ADC_data();        // Store data once conversion is finished
+            NS = IDLE;                             // Set next state
+        default:
+            NS = IDLE;                             // Set next state
+
+        }
+        PS = NS;                                   // Set present state to next state
+    }
 }
 
 //******************************************************************************
@@ -131,14 +165,46 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) PORT1_ISR (void)
 #error Compiler not supported!
 #endif
 {
+    __disable_interrupt();
     if(P1IFG & BIT1){
+        start_TimerA();
+        NS = I_MEAS;   // Update State
+        #ifdef debug
         P1OUT ^= BIT5; // Toggle P1.5 to indicate rising edge "received"
+        #endif
         P1IFG &= ~BIT1; // Clear interrupt flag
     }
     if(P1IFG & BIT2){
+        start_TimerA();
+        NS = I_MEAS;   // Update State
+        #ifdef debug
         P1OUT ^= BIT5; // Toggle P1.5 to indicate rising edge "received"
+        #endif
         P1IFG &= ~BIT2; // Clear interrupt flag
     }
+    __enable_interrupt();
 
+}
 
+//******************************************************************************
+// Timer A0 Interrupt***********************************************************
+//******************************************************************************
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector=TIMER0_A0_VECTOR
+__interrupt void Timer_A0_ISR (void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer_A0_ISR (void)
+#else
+#error Compiler not supported!
+#endif
+{
+    __disable_interrupt();
+    start_ADC_conversion();                    // Start ADC Conversion
+    TA0CTL = (TA0CTL & ~TA0_MODE_MASK) | MC_0; // Stop timer
+    TA0R = 0x0000;                             // Reset TA0R register
+
+    #ifdef debug
+    P1OUT ^= BIT5; // Toggle P1.5 to indicate rising edge "received"
+    #endif
+    __enable_interrupt();
 }

@@ -1,22 +1,24 @@
 /**
  * ADC.c
  */
+#include "ADC.h"
 
-static uint8_t conversion_status = 0;
+static bool conversion_status = false;
 static uint16_t ADC_data;
 
 void init_ADC(){
     ADC10CTL0 = SREF_0 | ADC10SHT_2 | ADC10SR | ADC10ON | ADC10IE;
-    ADC10CTL1 = INCH0 | SHS_0 | ADC10DIV_0 | ADC10SSEL_0 | CONSEQ_0;
+    ADC10CTL1 = INCH_0 | SHS_0 | ADC10DIV_0 | ADC10SSEL_0 | CONSEQ_0;
+    ADC10AE0 |= BIT0;  // Enable analog input to A0
 }
 
 void start_ADC_conversion(){
     ADC10CTL0 |= ENC | ADC10SC;   // Start conversion
-    conversion_status = 0;
+    conversion_status = false;
 }
 
-// Return 1 when conversion has been completed, 0 while waiting for conversion to finish
-uint8_t check_ADC_conversion(){
+// Return True when conversion has been completed, False while waiting for conversion to finish
+bool ADC_conversion_complete(){
     return conversion_status;
 }
 
@@ -43,7 +45,7 @@ void __attribute__ ((interrupt(ADC10_VECTOR))) ADC10_ISR (void)
     __disable_interrupt();
     // ADC10IFG is automatically reset when interrupt request is accepted
     ADC_data = ADC10MEM; // Transfer memory contents to a variable
-    conversion_status = 1; // Set conversion status to complete
+    conversion_status = true; // Set conversion status to complete
     __enable_interrupt();
 }
 
