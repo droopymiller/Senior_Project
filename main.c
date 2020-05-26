@@ -40,7 +40,7 @@
 
 #define CHGR_ADDR           0x47
 
-uint8_t CHG_SEL[14]      =  {0x00,      // 100mA
+const uint8_t CHG_SEL[14] = {0x00,      // 100mA
                              0x01,      // 150mA
                              0x02,      // 200mA
                              0x03,      // 250mA
@@ -84,12 +84,13 @@ uint8_t CHG_SEL[14]      =  {0x00,      // 100mA
  * 0.7V = Diode Drop
  * V_div = voltage divider ratio (R17, R18, R19)
  */
-#define CMD_TYPE_1_MASTER      4
-#define CMD_TYPE_2_MASTER      5
 
-#define DAC_DATA_LENGTH  2
-#define TYPE_1_LENGTH   2
-#define TYPE_2_LENGTH   6
+#define CMD_TYPE_1_MASTER       4
+#define CMD_TYPE_2_MASTER       5
+
+#define DAC_DATA_LENGTH         2
+#define TYPE_1_LENGTH           2
+#define TYPE_2_LENGTH           6
 
 
 /* MasterTypeX are example buffers initialized in the master, they will be
@@ -100,7 +101,7 @@ uint8_t CHG_SEL[14]      =  {0x00,      // 100mA
 
 // uint8_t MasterType2 [TYPE_2_LENGTH] = {'F', '4', '1', '9', '2', 'B'};
 
-uint8_t DAC_VOLT [DAC_DATA_LENGTH] = {0x00FF & (DAC_MAX_VOLT >> 2), 0x00FF & (DAC_MAX_VOLT << 6)};
+const uint8_t DAC_VOLT [DAC_DATA_LENGTH] = {0x00FF & (DAC_MAX_VOLT >> 2), 0x00FF & (DAC_MAX_VOLT << 6)};
 
 
 //******************************************************************************
@@ -122,7 +123,24 @@ bool timerA0_IFG = false;
 //******************************************************************************
 // Current Measurement *********************************************************
 //******************************************************************************
-uint16_t input_current;
+#define DC_OFFSET       1650  // DC Offset should be 1/2 of Vref [mV]
+#define TRANSCONDUCTANCE 2    // 5mOhm * 100V/V = 0.5 Ohm, 1/0.5 = 2 [I/V]
+#define VREF            3300  // ADC reference voltage [mV]
+
+uint16_t current_conversion(uint16_t input_current){
+
+    uint32_t input_current_mV;    // Input current [mV]
+    int16_t input_current_mA;    // Input current [mA]
+
+    input_current_mV = (uint32_t)input_current * VREF;
+    input_current_mV = input_current_mV / 1023; // Divide by ADC resolution - 1
+
+    input_current_mA = TRANSCONDUCTANCE * ((int16_t)input_current_mV - DC_OFFSET);
+    input_current_mA = abs(input_current_mA);
+
+
+    return input_current_mA;
+}
 
 //******************************************************************************
 // TimerA1 *********************************************************************
@@ -195,6 +213,9 @@ void chgr_switch_dis(){
 
 int main(void)
 {
+    uint16_t input_current;       // Raw input current
+    int16_t input_current_mA;     // Input current [mA]
+
     WDTCTL = WDTPW | WDTHOLD;   // stop watchdog timer
     init_cs();
     init_chgr_gpio();
@@ -212,7 +233,7 @@ int main(void)
     delay_ms(20);
 
     // Init DAC
-    I2C_Master_WriteReg(DAC_ADDR, DAC_PWR_ON_CONFIG, DAC_VOLT, DAC_DATA_LENGTH);
+    I2C_Master_WriteReg(DAC_ADDR, DAC_PWR_ON_CONFIG, (uint8_t *)DAC_VOLT, DAC_DATA_LENGTH);
 
     chgr_switch_en();    // Turn on switch to battery charger
     init_battery_chgr(); // Init battery charger
@@ -220,22 +241,17 @@ int main(void)
 
     // State machine loop
     while(1){
-        switch(PS) {
-        case I_MEAS:
+
+        if(timerA0_IFG){
             while(!ADC_conversion_complete());     // Wait for conversion to finish
             input_current = get_ADC_data();        // Store data once conversion is finished
-            NS = IDLE;                             // Set next state
-        default:
-            if(timerA1_IFG){
-                NS = UPDATE_DAC_and_CHGR;          // Update DAC and CHGR when timer interrupt occurs
-                timerA1_IFG = false;               // Clear flag
-            }
-            else{
-                NS = IDLE;                         // Set next state
-            }
-
+            input_current_mA = current_conversion(input_current);
+            timerA0_IFG = false;
         }
-        PS = NS;                                   // Set present state to next state
+        if(timerA1_IFG){
+            timerA1_IFG = false;               // Clear flag
+        }
+
     }
 }
 
@@ -255,7 +271,7 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) PORT1_ISR (void)
     __disable_interrupt();
     if(P1IFG & BIT1){
         start_TimerA0();
-        NS = I_MEAS;   // Update State
+//        NS = I_MEAS;   // Update State
         // #ifdef debug
         // P1OUT ^= BIT5; // Toggle P1.5 to indicate rising edge "received"
         // #endif
@@ -263,7 +279,7 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) PORT1_ISR (void)
     }
     if(P1IFG & BIT2){
         start_TimerA0();
-        NS = I_MEAS;   // Update State
+//        NS = I_MEAS;   // Update State
         // #ifdef debug
         // P1OUT ^= BIT5; // Toggle P1.5 to indicate rising edge "received"
         // #endif
@@ -289,6 +305,7 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer_A0_ISR (void)
     start_ADC_conversion();                    // Start ADC Conversion
     TA0CTL = (TA0CTL & ~TA0_MODE_MASK) | MC_0; // Stop timer
     TA0R = 0x0000;                             // Reset TA0R register
+    timerA0_IFG = true;                        // Set flag
 
     // #ifdef debug
     // P1OUT ^= BIT5; // Toggle P1.5 to indicate rising edge "received"
