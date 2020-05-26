@@ -7,6 +7,8 @@
 #define TA0_MODE_MASK   0b0000000000110000
 
 
-void init_TimerA();
+void init_TimerA0();
 
-void start_TimerA();
+void start_TimerA0();
+
+void init_TimerA1();
