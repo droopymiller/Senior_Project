@@ -127,7 +127,7 @@ bool timerA0_IFG = false;
 #define TRANSCONDUCTANCE 2    // 5mOhm * 100V/V = 0.5 Ohm, 1/0.5 = 2 [I/V]
 #define VREF            3300  // ADC reference voltage [mV]
 
-uint16_t current_conversion(uint16_t input_current){
+int16_t current_conversion(uint16_t input_current){
 
     uint32_t input_current_mV;    // Input current [mV]
     int16_t input_current_mA;    // Input current [mA]
