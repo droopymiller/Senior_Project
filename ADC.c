@@ -42,10 +42,8 @@ void __attribute__ ((interrupt(ADC10_VECTOR))) ADC10_ISR (void)
 #error Compiler not supported!
 #endif
 {
-    __disable_interrupt();
     // ADC10IFG is automatically reset when interrupt request is accepted
     ADC_data = ADC10MEM; // Transfer memory contents to a variable
     conversion_status = true; // Set conversion status to complete
-    __enable_interrupt();
 }
 

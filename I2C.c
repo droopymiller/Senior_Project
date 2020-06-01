@@ -105,7 +105,7 @@ void init_I2C(){
     UCB0CTL1 = UCSSEL_2 + UCSWRST;            // Use SMCLK, keep SW reset
     UCB0BR0 = 10;                             // fSCL = SMCLK/10 = ~100kHz
     UCB0BR1 = 0;
-    UCB0I2CSA = DAC_ADDR;                     // Slave Address
+    UCB0I2CSA = DEFAULT_ADDR;                     // Slave Address
     UCB0CTL1 &= ~UCSWRST;                     // Clear SW reset, resume operation
     UCB0I2CIE |= UCNACKIE;
 
@@ -225,4 +225,3 @@ void __attribute__ ((interrupt(USCIAB0RX_VECTOR))) USCIAB0RX_ISR (void)
         UCB0STAT &= ~(UCSTTIFG);                    //Clear START Flags
     }
 }
-

@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 #define MAX_BUFFER_SIZE     20
-#define DAC_ADDR            0x63 // Just using this as a default
+#define DEFAULT_ADDR            0x63 // Just using this as a default
 
 //******************************************************************************
 // General I2C State Machine ***************************************************

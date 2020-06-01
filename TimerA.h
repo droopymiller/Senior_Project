@@ -1,5 +1,5 @@
 /**
- * TimerA.c
+ * TimerA.h
  */
 
 #include <msp430.h>
