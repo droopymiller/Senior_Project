@@ -73,7 +73,7 @@ volatile bool timerA0_IFG = false;
 #define DC_OFFSET       1650  // DC Offset should be 1/2 of Vref [mV]
 #define TRANSCONDUCTANCE 2    // 5mOhm * 100V/V = 0.5 Ohm, 1/0.5 = 2 [I/V]
 #define VREF            3300  // ADC reference voltage [mV]
-#define SS_CURRENT      120   // Steady State Current of 5V supply [mA] w/ 20% tol.
+#define SS_CURRENT      140   // Steady State Current of 5V supply [mA] w/ 40% tol.
 
 int16_t current_conversion(uint16_t input_current){
 
@@ -95,7 +95,8 @@ uint16_t calc_target_mV(int16_t input_current_mA){
     if(input_current_mA > 1000){
         return 15000;
     }
-    return 29300; // For now just return the max target voltage
+    //return 29300; // For now just return the max target voltage
+    return 20000;
 }
 
 uint8_t calc_chgr_current_idx(int16_t input_current_mA){
@@ -110,8 +111,8 @@ uint8_t calc_chgr_current_idx(int16_t input_current_mA){
     }
     else{
         input_current_mA = (input_current_mA-100)/50; // Divide into size of chg incr.
-        if(input_current_mA > 13){
-            return 13;
+        if(input_current_mA > 8){
+            return 8;
         }
         else{
             return (uint8_t)input_current_mA;
@@ -127,6 +128,7 @@ uint8_t calc_chgr_current_idx(int16_t input_current_mA){
 // Seconds variable used to keep track of time
 // This is not a reliable way to keep track of time due to oscillator variation
 volatile uint16_t seconds = 0; // Variable to keep track of time
+volatile uint16_t chgr_dis_time = 0; // Delay turning on charger
 
 //******************************************************************************
 // General *********************************************************************
@@ -152,11 +154,23 @@ void delay_ms(uint8_t ms){
 }
 
 void init_zero_crossing_detection(){
+    P1SEL &= ~(BIT1 | BIT2);   // Set pin to I/O
+    P1SEL2 &= ~(BIT1 | BIT2);  // Set pin to I/O
     P1DIR &= ~(BIT1 | BIT2);
     P1IES &= ~(BIT1); // Set P1.1 to interrupt on rising edge
     P1IES |= BIT2;    // Set P1.2 to interrupt on falling edge
     P1IFG = 0;        // Clear interrupt flag in case it was set when configuring interrupt edge
     P1IE = BIT1 | BIT2;         // Enable interrupts
+    __enable_interrupt();
+}
+
+void init_chgr_dis_detection(){
+    P2SEL &= ~(BIT6);   // Set pin to I/O
+    P2SEL2 &= ~(BIT6);  // Set pin to I/O
+    P2DIR &= ~(BIT6);   // Set to input
+    P2IES |= BIT6;      // Set P2.6 to interrupt on falling edge
+    P2IFG = 0;          // Clear interrupt flag in case it was set when configuring interrupt edge
+    P2IE = BIT6;        // Enable interrrupts
     __enable_interrupt();
 }
 
@@ -178,10 +192,20 @@ int main(void)
     init_TimerA0();
     init_TimerA1();
     init_zero_crossing_detection();
+    init_chgr_dis_detection();
 
     // Temporary: Used for testing zero crossing detection
     P1DIR |= BIT5;
     P1OUT &= ~(BIT5);
+
+    // Green Status Led
+    // Keep Green Status Led on while powered
+    P2DIR |= BIT4;
+    P2OUT |= BIT4;
+
+    // Red Status Led
+    P2DIR |= BIT3;
+    P2OUT &= ~BIT3;
 
     // After MSP430 init, wait 20ms for 3.3V bus to rise to 3.3V
     // Do not initialize external hardware before this delay
@@ -208,7 +232,12 @@ int main(void)
         if(timerA1_IFG){
             if(seconds == CHGR_RST_TIME){
                 chgr_switch_dis();      // Turn off charger
-                /* Set DAC voltage here */
+                set_target_mV(calc_target_mV(input_current_mA));
+            }
+            else if(seconds <= chgr_dis_time){
+                chgr_switch_dis();      // Turn off chgr
+                set_target_mV(calc_target_mV(input_current_mA));
+                P2OUT &= ~BIT3;
             }
             else if(seconds > CHGR_RST_TIME){
                 chgr_switch_en();       // Turn on Charger
@@ -217,6 +246,7 @@ int main(void)
                 set_chgr_current(calc_chgr_current_idx(input_current_mA));
 
                 seconds = 0;            // Reset seconds variable after 5 hrs
+                chgr_dis_time = 0;
             }
             else{
                 set_target_mV(calc_target_mV(input_current_mA));
@@ -259,6 +289,29 @@ void __attribute__ ((interrupt(PORT1_VECTOR))) PORT1_ISR (void)
     }
 
 }
+
+//******************************************************************************
+// Charger Disable Detection Interrupt******************************************
+//******************************************************************************
+
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector = PORT2_VECTOR
+__interrupt void PORT2_ISR(void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(PORT2_VECTOR))) PORT2_ISR (void)
+#else
+#error Compiler not supported!
+#endif
+{
+    if(P2IFG & BIT6){
+        chgr_dis_time = seconds + 2; // Keep track of when chgr should turn on
+        P2OUT |= BIT3;
+        chgr_switch_dis();      // Turn off chgr
+        P2IFG &= ~BIT6; // Clear interrupt flag
+    }
+
+}
+
 
 //******************************************************************************
 // Timer A0 Interrupt***********************************************************

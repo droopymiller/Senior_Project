@@ -4,7 +4,7 @@
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROGRAM.MSP430G2533.ccxml.TI MSP430 USB1/MSP430" value="${build_artifact:Senior_Project}"/>
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROJECT.MSP430G2533.ccxml.TI MSP430 USB1/MSP430" value="Senior_Project"/>
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_TARGET_CONFIG" value="${target_config_active_default:Senior_Project}"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.MSP430G2533.ccxml.TI MSP430 USB1/MSP430" value="/Users/drewmiller/Documents/workspace/Senior_Project/Debug/Senior_Project.out"/>
+<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.MSP430G2533.ccxml.TI MSP430 USB1/MSP430" value="/Users/drewmiller/workspace_v9/Senior_Project/Debug/Senior_Project.out"/>
 <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
 <listEntry value="/Senior_Project"/>
 </listAttribute>
